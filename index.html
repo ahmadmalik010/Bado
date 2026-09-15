@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>تۆڕی کۆمەڵایەتی - Local App</title>
+    <title>تۆڕی کۆمەڵایەتی - Badoo Style</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: Tahoma, sans-serif; }
         body { background-color: #f4f4f4; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
@@ -201,7 +201,16 @@
         </form>
     </div>
 
+    <script src="/socket.io/socket.io.js"></script>
     <script>
+        // بەستنەوەی سۆکێت بە سێرڤەری فەرمی Railway
+        let socket;
+        try { 
+            socket = io('https://bado-production.up.railway.app'); 
+        } catch(e) {
+            console.log("Socket connection error: ", e);
+        }
+
         const loginScreen = document.getElementById('login-screen');
         const chatScreen = document.getElementById('chat-screen');
         const editProfileScreen = document.getElementById('edit-profile-screen');
@@ -252,15 +261,12 @@
         const chatImageInput = document.getElementById('chat-image-input');
         const messages = document.getElementById('messages');
 
-        let currentUser = null;
-        let targetUserId = null;
+        let allUsers = [];
+        let friends = [];
+        let allPosts = [];
+        let currentIndex = 0;
+        let targetSocketId = null;
         let myAvatarBase64 = 'https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_1280.png';
-
-        // نموونەی بەکارهێنەرانی دروستکراو بۆ ئەوەی هەمیشە کەسێک هەبێت لە ئەپەکەدا بدۆزیتەوە
-        let sampleUsers = [
-            { id: 'u1', name: 'سۆما احمد', age: 22, bio: 'سڵاو لە هەمووان', status: 'سینگڵ (Single)', avatar: 'https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_1280.png' },
-            { id: 'u2', name: 'محمد محەمەد', age: 25, bio: 'گەشتیار و فۆتۆگرافەر', status: 'دەزگیران (Engaged)', avatar: 'https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_1280.png' }
-        ];
 
         navBtns.forEach(btn => {
             btn.addEventListener('click', () => {
@@ -272,7 +278,7 @@
                 target.classList.add('active');
 
                 if(btn.dataset.target === 'discover-tab') headerTitle.textContent = 'تۆڕی ناسینەوە';
-                if(btn.dataset.target === 'posts-tab') { headerTitle.textContent = 'پۆستە گشتییەکان'; loadPosts(); }
+                if(btn.dataset.target === 'posts-tab') headerTitle.textContent = 'پۆستە گشتییەکان';
                 if(btn.dataset.target === 'search-tab') headerTitle.textContent = 'گەڕان';
                 if(btn.dataset.target === 'friends-tab') headerTitle.textContent = 'هاوڕێکانم';
                 if(btn.dataset.target === 'chats-tab') headerTitle.textContent = 'نامەکان';
@@ -283,18 +289,23 @@
             const savedData = localStorage.getItem('badoo_user_account');
             if (savedData) {
                 try {
-                    currentUser = JSON.parse(savedData);
-                    usernameInput.value = currentUser.name || '';
-                    emailInput.value = currentUser.email || '';
-                    ageInput.value = currentUser.age || '';
-                    bioInput.value = currentUser.bio || '';
-                    statusInput.value = currentUser.status || 'سینگڵ (Single)';
-                    if (currentUser.avatar) myAvatarBase64 = currentUser.avatar;
+                    const profile = JSON.parse(savedData);
+                    if (profile.name && profile.email) {
+                        usernameInput.value = profile.name || '';
+                        emailInput.value = profile.email || '';
+                        ageInput.value = profile.age || '';
+                        bioInput.value = profile.bio || '';
+                        statusInput.value = profile.status || 'سینگڵ (Single)';
+                        if (profile.avatar) myAvatarBase64 = profile.avatar;
 
-                    loginScreen.style.display = 'none';
-                    chatScreen.style.display = 'flex';
-                    loadDiscoverCards();
-                    loadPosts();
+                        if (socket) {
+                            socket.emit('set profile', { 
+                                name: profile.name, age: profile.age, bio: profile.bio, status: profile.status, avatar: myAvatarBase64 
+                            });
+                        }
+                        loginScreen.style.display = 'none';
+                        chatScreen.style.display = 'flex';
+                    }
                 } catch(err) { localStorage.removeItem('badoo_user_account'); }
             }
         });
@@ -326,29 +337,19 @@
         });
 
         function saveAndLogin(email, password, name, age, bio, status) {
-            currentUser = { id: 'user_' + Date.now(), email, password, name, age, bio, status, avatar: myAvatarBase64 };
-            localStorage.setItem('badoo_user_account', JSON.stringify(currentUser));
+            const accountData = { email, password, name, age, bio, status, avatar: myAvatarBase64 };
+            localStorage.setItem('badoo_user_account', JSON.stringify(accountData));
 
-            // زیادکردنی بۆ لیستی گشتی بەکارهێنەران
-            let allRegUsers = JSON.parse(localStorage.getItem('badoo_all_users') || '[]');
-            if(!allRegUsers.some(u => u.email === email)) {
-                allRegUsers.push(currentUser);
-                localStorage.setItem('badoo_all_users', JSON.stringify(allRegUsers));
-            }
-
+            if (socket) socket.emit('set profile', accountData);
             loginScreen.style.display = 'none';
             chatScreen.style.display = 'flex';
-            loadDiscoverCards();
-            loadPosts();
         }
 
         openEditBtn.addEventListener('click', () => {
-            if(currentUser) {
-                editName.value = currentUser.name;
-                editAge.value = currentUser.age;
-                editBio.value = currentUser.bio;
-                editStatus.value = currentUser.status;
-            }
+            editName.value = usernameInput.value;
+            editAge.value = ageInput.value;
+            editBio.value = bioInput.value;
+            editStatus.value = statusInput.value;
             editProfileScreen.style.display = 'flex';
         });
 
@@ -360,47 +361,119 @@
             const bio = editBio.value.trim();
             const status = editStatus.value;
 
-            if (name && currentUser) {
+            if (name) {
                 const file = editAvatarFile.files[0];
                 if (file) {
                     const reader = new FileReader();
                     reader.onload = function(e) {
                         myAvatarBase64 = e.target.result;
-                        updateProfileData(name, age, bio, status);
+                        updateAndSaveProfile(name, age, bio, status);
                     };
                     reader.readAsDataURL(file);
-                } else { updateProfileData(name, age, bio, status); }
+                } else { updateAndSaveProfile(name, age, bio, status); }
             } else { alert('ناو بەتاڵ نەبێت'); }
         });
 
-        function updateProfileData(name, age, bio, status) {
-            currentUser.name = name;
-            currentUser.age = age;
-            currentUser.bio = bio;
-            currentUser.status = status;
-            currentUser.avatar = myAvatarBase64;
-            localStorage.setItem('badoo_user_account', JSON.stringify(currentUser));
+        function updateAndSaveProfile(name, age, bio, status) {
+            usernameInput.value = name;
+            ageInput.value = age;
+            bioInput.value = bio;
+            statusInput.value = status;
+
+            const savedData = JSON.parse(localStorage.getItem('badoo_user_account')) || {};
+            savedData.name = name; savedData.age = age; savedData.bio = bio; savedData.status = status; savedData.avatar = myAvatarBase64;
+            localStorage.setItem('badoo_user_account', JSON.stringify(savedData));
+
+            if (socket) socket.emit('update profile', savedData);
             editProfileScreen.style.display = 'none';
-            alert('پرۆفایلەکەت نوێ کرایەوە!');
         }
 
-        // بەشی دۆزینەوە (Swipe)
-        let discoverIndex = 0;
-        function loadDiscoverCards() {
-            cardContainer.innerHTML = '';
-            let allRegUsers = JSON.parse(localStorage.getItem('badoo_all_users') || '[]');
-            let otherUsers = allRegUsers.filter(u => currentUser && u.email !== currentUser.email);
-            if(otherUsers.length === 0) otherUsers = sampleUsers;
+        publishPostBtn.addEventListener('click', () => {
+            const text = postTextInput.value.trim();
+            const file = postImgInput.files[0];
 
-            if (discoverIndex >= otherUsers.length) discoverIndex = 0;
-            if (otherUsers.length === 0) {
-                cardContainer.innerHTML = `<div style="text-align:center; color:#777; padding:20px;">هیچ کەسێکی تر نییە...</div>`;
+            if (!text && !file) {
+                alert('تکایە شتێک بنووسە یان وێنەیەک هەڵبژێرە');
+                return;
+            }
+
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    sendPostData(text, e.target.result);
+                };
+                reader.readAsDataURL(file);
+            } else {
+                sendPostData(text, null);
+            }
+        });
+
+        function sendPostData(text, img) {
+            const postData = {
+                authorName: usernameInput.value,
+                authorAvatar: myAvatarBase64,
+                text: text,
+                image: img,
+                likes: 0
+            };
+            socket.emit('new post', postData);
+            postTextInput.value = '';
+            postImgInput.value = '';
+        }
+
+        if (socket) {
+            socket.on('update users', (users) => {
+                allUsers = users.filter(user => user.id !== socket.id);
+                if (currentIndex >= allUsers.length) currentIndex = 0;
+                showCurrentCard();
+            });
+
+            socket.on('update posts', (posts) => {
+                allPosts = posts;
+                renderPosts();
+            });
+        }
+
+        function renderPosts() {
+            postsFeed.innerHTML = '';
+            if (allPosts.length === 0) {
+                postsFeed.innerHTML = `<div style="text-align:center; color:#777; padding:10px;">هیچ پۆستێک نییە...</div>`;
+                return;
+            }
+
+            allPosts.slice().reverse().forEach((post, index) => {
+                const card = document.createElement('div');
+                card.className = 'post-card';
+                card.innerHTML = `
+                    <div class="post-header">
+                        <img src="${post.authorAvatar || 'https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_1280.png'}">
+                        <h4>${post.authorName}</h4>
+                    </div>
+                    ${post.text ? `<div class="post-body">${post.text}</div>` : ''}
+                    ${post.image ? `<img src="${post.image}" class="post-img">` : ''}
+                    <div class="post-footer">
+                        <span>❤ لایک (${post.likes || 0})</span>
+                    </div>
+                `;
+                
+                card.querySelector('.post-footer').addEventListener('click', () => {
+                    socket.emit('like post', allPosts.length - 1 - index);
+                });
+
+                postsFeed.appendChild(card);
+            });
+        }
+
+        function showCurrentCard() {
+            cardContainer.innerHTML = '';
+            if (allUsers.length === 0 || currentIndex >= allUsers.length) {
+                cardContainer.innerHTML = `<div style="text-align:center; color:#777; padding:20px;">هیچ کەسێکی تر آنلاین نییە...</div>`;
                 actionButtons.style.display = 'none';
                 return;
             }
 
             actionButtons.style.display = 'flex';
-            const user = otherUsers[discoverIndex];
+            const user = allUsers[currentIndex];
 
             const card = document.createElement('div');
             card.className = 'swipe-card';
@@ -416,139 +489,63 @@
         }
 
         skipBtn.addEventListener('click', () => {
-            discoverIndex++;
-            loadDiscoverCards();
+            currentIndex++;
+            showCurrentCard();
         });
 
         likeBtn.addEventListener('click', () => {
-            let allRegUsers = JSON.parse(localStorage.getItem('badoo_all_users') || '[]');
-            let otherUsers = allRegUsers.filter(u => currentUser && u.email !== currentUser.email);
-            if(otherUsers.length === 0) otherUsers = sampleUsers;
-
-            if (otherUsers.length > 0 && discoverIndex < otherUsers.length) {
-                const user = otherUsers[discoverIndex];
-                addFriendToList(user);
+            if (allUsers.length > 0 && currentIndex < allUsers.length) {
+                const user = allUsers[currentIndex];
+                if (!friends.some(f => f.id === user.id)) {
+                    friends.push(user);
+                    renderFriends();
+                }
                 openChat(user.id, user.name);
-                discoverIndex++;
-                loadDiscoverCards();
+                currentIndex++;
+                showCurrentCard();
             }
         });
 
-        // بڵاوکردنەوەی پۆست
-        publishPostBtn.addEventListener('click', () => {
-            const text = postTextInput.value.trim();
-            const file = postImgInput.files[0];
-
-            if (!text && !file) {
-                alert('تکایە شتێک بنووسە یان وێنەیەک هەڵبژێرە');
-                return;
-            }
-
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    savePost(text, e.target.result);
-                };
-                reader.readAsDataURL(file);
-            } else {
-                savePost(text, null);
-            }
-        });
-
-        function savePost(text, img) {
-            const posts = JSON.parse(localStorage.getItem('badoo_posts') || '[]');
-            const newPost = {
-                authorName: currentUser ? currentUser.name : 'بەکارهێنەر',
-                authorAvatar: myAvatarBase64,
-                text: text,
-                image: img,
-                likes: 0
-            };
-            posts.push(newPost);
-            localStorage.setItem('badoo_posts', JSON.stringify(posts));
-            postTextInput.value = '';
-            postImgInput.value = '';
-            loadPosts();
-        }
-
-        function loadPosts() {
-            postsFeed.innerHTML = '';
-            const posts = JSON.parse(localStorage.getItem('badoo_posts') || '[]');
-            if (posts.length === 0) {
-                postsFeed.innerHTML = `<div style="text-align:center; color:#777; padding:10px;">هیچ پۆستێک نییە... یەکەم کەس بە پۆست بکە!</div>`;
-                return;
-            }
-
-            posts.slice().reverse().forEach((post, index) => {
-                const card = document.createElement('div');
-                card.className = 'post-card';
-                card.innerHTML = `
-                    <div class="post-header">
-                        <img src="${post.authorAvatar || 'https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_1280.png'}">
-                        <h4>${post.authorName}</h4>
-                    </div>
-                    ${post.text ? `<div class="post-body">${post.text}</div>` : ''}
-                    ${post.image ? `<img src="${post.image}" class="post-img">` : ''}
-                    <div class="post-footer" data-index="${posts.length - 1 - index}">
-                        <span>❤ لایک (${post.likes || 0})</span>
-                    </div>
-                `;
-                card.querySelector('.post-footer').addEventListener('click', function() {
-                    let idx = this.getAttribute('data-index');
-                    posts[idx].likes = (posts[idx].likes || 0) + 1;
-                    localStorage.setItem('badoo_posts', JSON.stringify(posts));
-                    loadPosts();
-                });
-                postsFeed.appendChild(card);
-            });
-        }
-
-        // گەڕان بەدوای بەکارهێنەردا
         searchBtn.addEventListener('click', () => {
             const query = searchInput.value.trim().toLowerCase();
             searchResults.innerHTML = '';
 
-            let allRegUsers = JSON.parse(localStorage.getItem('badoo_all_users') || '[]');
-            let searchable = allRegUsers.concat(sampleUsers);
-            const matched = searchable.filter(u => u.name && u.name.toLowerCase().includes(query));
+            if (!query) {
+                searchResults.innerHTML = `<li style="text-align:center; color:#777; padding:20px;">تکایە ناو بنووسە...</li>`;
+                return;
+            }
 
-            if (matched.length === 0) {
+            const matchedUsers = allUsers.filter(u => u.name && u.name.toLowerCase().includes(query));
+
+            if (matchedUsers.length === 0) {
                 searchResults.innerHTML = `<li style="text-align:center; color:#777; padding:20px;">کەس نەدۆزرایەوە...</li>`;
                 return;
             }
 
-            matched.forEach(user => {
+            matchedUsers.forEach(user => {
                 const li = document.createElement('li');
                 li.className = 'user-item';
                 li.innerHTML = `
                     <img src="${user.avatar}">
                     <div class="info">
                         <h4>${user.name}</h4>
-                        <p>بۆ دەستپێکردنی چات کلیک بکە</p>
+                        <p>بۆ چات کلیک بکە</p>
                     </div>
                 `;
                 li.addEventListener('click', () => {
-                    addFriendToList(user);
+                    if (!friends.some(f => f.id === user.id)) {
+                        friends.push(user);
+                        renderFriends();
+                    }
                     openChat(user.id, user.name);
                 });
                 searchResults.appendChild(li);
             });
         });
 
-        function addFriendToList(user) {
-            let friends = JSON.parse(localStorage.getItem('badoo_friends') || '[]');
-            if (!friends.some(f => f.id === user.id)) {
-                friends.push(user);
-                localStorage.setItem('badoo_friends', JSON.stringify(friends));
-            }
-            renderFriends();
-        }
-
         function renderFriends() {
             friendsList.innerHTML = '';
             chatsList.innerHTML = '';
-            let friends = JSON.parse(localStorage.getItem('badoo_friends') || '[]');
-            
             if (friends.length === 0) {
                 friendsList.innerHTML = `<li style="text-align:center; color:#777; padding:20px;">هێشتا هیچ هاوڕێیەکت نییە...</li>`;
                 chatsList.innerHTML = `<li style="text-align:center; color:#777; padding:20px;">هیچ نامەیەک نییە...</li>`;
@@ -575,9 +572,9 @@
         }
 
         function openChat(id, name) {
-            targetUserId = id;
+            targetSocketId = id;
             currentChatUser.textContent = `چات لەگەڵ: ${name}`;
-            loadMessages();
+            messages.innerHTML = '';
             chatBoxModal.style.display = 'flex';
         }
 
@@ -585,34 +582,46 @@
 
         form.addEventListener('submit', (e) => {
             e.preventDefault();
-            if (targetUserId && input.value.trim()) {
-                const msgText = input.value;
-                saveMessage(targetUserId, msgText, 'text', 'my-msg');
-                appendMessage(msgText, 'text', 'my-msg');
-                input.value = '';
+            if (targetSocketId && socket) {
+                if (input.value.trim()) {
+                    const msgText = input.value;
+                    socket.emit('private message', { to: targetSocketId, msg: msgText, type: 'text' });
+                    appendMessage(msgText, 'text', 'my-msg');
+                    input.value = '';
+                }
+
+                const file = chatImageInput.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        const base64Img = e.target.result;
+                        socket.emit('private message', { to: targetSocketId, msg: base64Img, type: 'image' });
+                        appendMessage(base64Img, 'image', 'my-msg');
+                        chatImageInput.value = '';
+                    };
+                    reader.readAsDataURL(file);
+                }
             }
         });
 
-        function saveMessage(receiverId, content, type, className) {
-            const allMsgs = JSON.parse(localStorage.getItem('badoo_messages') || '{}');
-            const key = currentUser.id + '_' + receiverId;
-            if(!allMsgs[key]) allMsgs[key] = [];
-            allMsgs[key].push({ content, type, className });
-            localStorage.setItem('badoo_messages', JSON.stringify(allMsgs));
-        }
+        if (socket) {
+            socket.on('private message', (data) => {
+                const sender = allUsers.find(u => u.id === data.senderId) || friends.find(f => f.id === data.senderId);
+                if (sender && !friends.some(f => f.id === sender.id)) {
+                    friends.push(sender);
+                    renderFriends();
+                }
 
-        function loadMessages() {
-            messages.innerHTML = '';
-            const allMsgs = JSON.parse(localStorage.getItem('badoo_messages') || '{}');
-            const key = currentUser.id + '_' + targetUserId;
-            if(allMsgs[key]) {
-                allMsgs[key].forEach(m => appendMessage(m.content, m.type, m.className));
-            }
+                if (data.senderId === targetSocketId) {
+                    appendMessage(data.msg, data.type, 'other-msg');
+                }
+            });
         }
 
         function appendMessage(content, type, className) {
             const item = document.createElement('li');
             item.className = className;
+
             if (type === 'image') {
                 const img = document.createElement('img');
                 img.src = content;
@@ -621,12 +630,10 @@
             } else {
                 item.textContent = content;
             }
+
             messages.appendChild(item);
             messages.scrollTop = messages.scrollHeight;
         }
-
-        // بارکردنی سەرەتایی هاوڕێکان
-        renderFriends();
     </script>
 </body>
 </html>
