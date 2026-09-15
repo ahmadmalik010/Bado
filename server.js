@@ -4,7 +4,12 @@ const { Server } = require('socket.io');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+const io = new Server(server, {
+    cors: {
+        origin: "*",
+        methods: ["GET", "POST"]
+    }
+});
 
 app.use(express.static(__dirname));
 
@@ -14,7 +19,7 @@ let posts = [];
 io.on('connection', (socket) => {
     console.log('User connected: ', socket.id);
 
-    // ناردنی پۆستەکانی پێشوو بۆ کەسە نوێیەکە
+    // ناردنی داتای پێشوو بۆ کەسی نوێ
     socket.emit('update posts', posts);
 
     socket.on('set profile', (userData) => {
@@ -22,6 +27,7 @@ io.on('connection', (socket) => {
         socket.data = { id: socket.id, ...userData };
         users.push(socket.data);
         io.emit('update users', users);
+        console.log('Active users:', users.length);
     });
 
     socket.on('update profile', (userData) => {
@@ -31,10 +37,11 @@ io.on('connection', (socket) => {
         io.emit('update users', users);
     });
 
-    // زیادکردنی پۆستی نوێ
+    // بڵاوکردنەوەی پۆست بۆ هەمووان
     socket.on('new post', (postData) => {
         posts.push(postData);
         io.emit('update posts', posts);
+        console.log('New post added, total posts:', posts.length);
     });
 
     // لایکی پۆست
