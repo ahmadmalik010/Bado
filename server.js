@@ -6,57 +6,57 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-app.use(express.static('public'));
+app.use(express.static(__dirname));
 
-const users = {};
+let users = [];
+let posts = [];
 
 io.on('connection', (socket) => {
-    console.log('بەکارهێنەرێک پەیوەندی بەست:', socket.id);
+    console.log('User connected: ', socket.id);
 
-    // وەرگرتنی پرۆفایلی سەرەتایی بەکارهێنەر
-    socket.on('set profile', (profile) => {
-        users[socket.id] = {
-            id: socket.id,
-            name: profile.name,
-            age: profile.age,
-            avatar: profile.avatar,
-            bio: profile.bio,
-            status: profile.status
-        };
-        io.emit('update users', Object.values(users));
+    // ناردنی پۆستەکانی پێشوو بۆ کەسە نوێیەکە
+    socket.emit('update posts', posts);
+
+    socket.on('set profile', (userData) => {
+        users = users.filter(u => u.id !== socket.id);
+        socket.data = { id: socket.id, ...userData };
+        users.push(socket.data);
+        io.emit('update users', users);
     });
 
-    // نوێکردنەوەی پرۆفایل
-    socket.on('update profile', (profile) => {
-        if (users[socket.id]) {
-            users[socket.id].name = profile.name;
-            users[socket.id].age = profile.age;
-            users[socket.id].avatar = profile.avatar;
-            users[socket.id].bio = profile.bio;
-            users[socket.id].status = profile.status;
-            
-            io.emit('update users', Object.values(users));
+    socket.on('update profile', (userData) => {
+        users = users.filter(u => u.id !== socket.id);
+        socket.data = { id: socket.id, ...userData };
+        users.push(socket.data);
+        io.emit('update users', users);
+    });
+
+    // زیادکردنی پۆستی نوێ
+    socket.on('new post', (postData) => {
+        posts.push(postData);
+        io.emit('update posts', posts);
+    });
+
+    // لایکی پۆست
+    socket.on('like post', (index) => {
+        if (posts[index]) {
+            posts[index].likes = (posts[index].likes || 0) + 1;
+            io.emit('update posts', posts);
         }
     });
 
-    // ناردنی پەیامی تایبەت (تێکست یان وێنە) بۆ کەسی بەرامبەر
-    socket.on('private message', (data) => {
-        io.to(data.to).emit('private message', {
-            msg: data.msg,
-            type: data.type, // تێکست یان وێنە
-            senderId: socket.id
-        });
+    socket.on('private message', ({ to, msg, type }) => {
+        io.to(to).emit('private message', { senderId: socket.id, msg, type });
     });
 
-    // کاتێک بەکارهێنەر دەردەچێت
     socket.on('disconnect', () => {
-        console.log('بەکارهێنەر دەرچوو:', socket.id);
-        delete users[socket.id];
-        io.emit('update users', Object.values(users));
+        users = users.filter(u => u.id !== socket.id);
+        io.emit('update users', users);
+        console.log('User disconnected: ', socket.id);
     });
 });
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-    console.log(`سێرڤەر لەسەر پۆرت ${PORT} کار دەکات`);
+    console.log(`Server is running on port ${PORT}`);
 });
