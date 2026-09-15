@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="ckb" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تۆڕی کۆمەڵایەتی - Local App</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: Tahoma, sans-serif; }
+        body { background-color: #f4f4f4; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        
+        #login-screen, #edit-profile-screen { display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; gap: 12px; background: #fff; padding: 20px; position: fixed; top: 0; left: 0; width: 100%; z-index: 100; overflow-y: auto; }
+        #edit-profile-screen { display: none; background: rgba(0,0,0,0.5); }
+        .modal-box { background: #fff; padding: 20px; border-radius: 10px; display: flex; flex-direction: column; gap: 10px; width: 90%; max-width: 320px; }
+        
+        input, select, textarea, .file-upload-label { padding: 10px; width: 100%; border: 1px solid #ccc; border-radius: 8px; font-size: 14px; outline: none; background: #fff; text-align: center; color: #555; }
+        .file-upload-label { background: #f0f0f0; border: 1px dashed #ea266e; color: #ea266e; font-weight: bold; cursor: pointer; display: block; }
+        input[type="file"] { display: none; }
+
+        button { padding: 10px 20px; width: 100%; background: #ea266e; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 15px; }
+
+        #chat-screen { display: none; width: 100%; height: 100vh; flex-direction: column; background: #f9f9f9; position: relative; }
+        
+        .app-header { background: #ea266e; color: white; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; font-weight: bold; }
+        .app-header button { width: auto; background: white; color: #ea266e; font-size: 12px; padding: 6px 12px; border-radius: 15px; }
+
+        .tab-content { flex: 1; display: none; flex-direction: column; overflow-y: auto; position: relative; padding-bottom: 70px; }
+        .tab-content.active { display: flex; }
+
+        /* بەشی دۆزینەوە */
+        #discover-tab { justify-content: center; align-items: center; padding: 20px; }
+        .swipe-card { background: white; width: 100%; max-width: 320px; height: 380px; border-radius: 15px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.1); display: flex; flex-direction: column; position: absolute; }
+        .swipe-card img { width: 100%; height: 240px; object-fit: cover; }
+        .swipe-card .card-info { padding: 12px; display: flex; flex-direction: column; gap: 4px; text-align: center; }
+        .swipe-card .card-info h3 { font-size: 18px; color: #333; }
+        .swipe-card .card-info .status-badge { color: #ea266e; font-size: 12px; font-weight: bold; }
+        .swipe-card .card-info p { font-size: 12px; color: #666; }
+
+        .action-buttons { display: flex; gap: 15px; width: 100%; max-width: 320px; margin-top: 340px; z-index: 5; }
+        .action-buttons button { flex: 1; padding: 12px; border-radius: 25px; font-size: 14px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        #skip-btn { background: #fff; color: #777; border: 1px solid #ddd; }
+        #like-btn { background: #ea266e; color: #fff; }
+
+        /* بەشی پۆستەکان */
+        #posts-tab { padding: 15px; gap: 15px; align-items: center; }
+        .create-post-box { background: white; width: 100%; max-width: 400px; padding: 15px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); display: flex; flex-direction: column; gap: 10px; }
+        .posts-feed { width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 15px; }
+        .post-card { background: white; width: 100%; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); overflow: hidden; display: flex; flex-direction: column; }
+        .post-header { display: flex; align-items: center; gap: 10px; padding: 10px 15px; border-bottom: 1px solid #eee; }
+        .post-header img { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; }
+        .post-header h4 { font-size: 14px; color: #333; }
+        .post-body { padding: 12px 15px; font-size: 14px; color: #444; }
+        .post-img { width: 100%; max-height: 300px; object-fit: cover; }
+        .post-footer { padding: 10px 15px; display: flex; gap: 15px; border-top: 1px solid #eee; font-size: 13px; color: #ea266e; font-weight: bold; cursor: pointer; }
+
+        /* گەڕان و هاوڕێکان */
+        #search-tab { padding: 15px; gap: 15px; }
+        .search-box-container { display: flex; gap: 8px; width: 100%; max-width: 400px; margin: 0 auto; }
+        .search-results, .friends-list, .chats-list { list-style: none; padding: 0; width: 100%; max-width: 400px; margin: 0 auto; display: flex; flex-direction: column; gap: 8px; }
+        
+        .user-item { background: white; padding: 10px 15px; border-radius: 10px; display: flex; align-items: center; gap: 12px; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .user-item img { width: 50px; height: 50px; border-radius: 50%; object-fit: cover; }
+        .user-item .info h4 { font-size: 15px; color: #333; }
+        .user-item .info p { font-size: 12px; color: #777; }
+
+        /* نڤێگەیشنی خوارەوە */
+        .bottom-nav { display: flex; background: #fff; border-top: 1px solid #ddd; height: 60px; position: fixed; bottom: 0; left: 0; width: 100%; z-index: 40; }
+        .nav-btn { flex: 1; background: none; border: none; color: #888; font-size: 11px; font-weight: bold; cursor: pointer; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 3px; }
+        .nav-btn.active { color: #ea266e; }
+
+        /* پەنجەرەی چات */
+        #chat-box-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100vh; background: #fff; z-index: 50; flex-direction: column; }
+        .chat-header { background: #ea266e; color: white; padding: 15px; font-weight: bold; font-size: 15px; display: flex; justify-content: space-between; align-items: center; }
+        #messages { list-style: none; flex: 1; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; background: #fafafa; }
+        #messages li { background: #ffffff; padding: 10px 14px; border-radius: 10px; max-width: 75%; word-wrap: break-word; box-shadow: 0 1px 2px rgba(0,0,0,0.05); font-size: 14px; }
+        #messages li.my-msg { background: #ffe6ef; margin-right: auto; }
+        #messages li.other-msg { background: #fff; }
+        .chat-img-msg { width: 100%; max-width: 200px; border-radius: 8px; margin-top: 5px; display: block; }
+
+        #form { background: #fff; padding: 10px; display: flex; gap: 8px; border-top: 1px solid #ddd; align-items: center; }
+        #input { flex: 1; padding: 8px 12px; border: 1px solid #ccc; border-radius: 20px; outline: none; font-size: 14px; text-align: right; }
+        .chat-img-btn { background: #f0f0f0; color: #ea266e; border: 1px solid #ea266e; padding: 8px 12px; border-radius: 20px; cursor: pointer; font-size: 13px; font-weight: bold; white-space: nowrap; }
+        #form button[type="submit"] { width: auto; background: #ea266e; color: white; border: none; padding: 8px 16px; border-radius: 20px; font-weight: bold; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <div id="login-screen">
+        <h2>تۆمارکردن / چوونەژوورەوە</h2>
+        <input id="email-input" type="email" placeholder="ئیمەیڵ (Email)..." autocomplete="off" />
+        <input id="password-input" type="password" placeholder="تێپەڕەوشە (Password)..." />
+        <input id="username-input" placeholder="ناوی خۆت..." autocomplete="off" />
+        <input id="age-input" type="number" placeholder="تەمەنت..." />
+        <textarea id="bio-input" placeholder="دەربارەی خۆت (Bio)..." rows="2"></textarea>
+        
+        <select id="status-input">
+            <option value="سینگڵ (Single)">سینگڵ (Single)</option>
+            <option value="دەزگیران (Engaged)">دەزگیران (Engaged)</option>
+            <option value="هاوسەرگیریکردووە (Married)">هاوسەرگیریکردووە (Married)</option>
+        </select>
+
+        <label for="avatar-file" class="file-upload-label">وێنەی پرۆفایل هەڵبژێرە 📁</label>
+        <input type="file" id="avatar-file" accept="image/*" />
+
+        <button id="login-btn">تۆمارکردن و دەستپێکردن</button>
+    </div>
+
+    <!-- پەنجەرەی دەستکاری پرۆفایل -->
+    <div id="edit-profile-screen">
+        <div class="modal-box">
+            <h3>دەستکاری پرۆفایل</h3>
+            <input id="edit-name" placeholder="ناوی نوێ..." />
+            <input id="edit-age" type="number" placeholder="تەمەنی نوێ..." />
+            <textarea id="edit-bio" placeholder="بایۆی نوێ..." rows="2"></textarea>
+            
+            <select id="edit-status">
+                <option value="سینگڵ (Single)">سینگڵ (Single)</option>
+                <option value="دەزگیران (Engaged)">دەزگیران (Engaged)</option>
+                <option value="هاوسەرگیریکردووە (Married)">هاوسەرگیریکردووە (Married)</option>
+            </select>
+
+            <label for="edit-avatar-file" class="file-upload-label">گۆڕینی وێنە 📁</label>
+            <input type="file" id="edit-avatar-file" accept="image/*" />
+
+            <button id="save-profile-btn">پاشەکەوتکردن</button>
+            <button id="close-modal-btn" style="background: #777;">پەشیمانبوونەوە</button>
+        </div>
+    </div>
+
+    <div id="chat-screen">
+        <div class="app-header">
+            <span id="header-title">تۆڕی ناسینەوە</span>
+            <button id="open-edit-btn">پرۆفایلی من</button>
+        </div>
+
+        <!-- تبەکان -->
+        <div id="discover-tab" class="tab-content active">
+            <div class="discovery-container" id="card-container"></div>
+            <div class="action-buttons" id="action-buttons" style="display: none;">
+                <button id="skip-btn">بەرەو پێش (✕)</button>
+                <button id="like-btn">لایک و چات (❤)</button>
+            </div>
+        </div>
+
+        <div id="posts-tab" class="tab-content">
+            <div class="create-post-box">
+                <textarea id="post-text-input" placeholder="شتێک بنووسە بۆ پۆستکردن..." rows="2"></textarea>
+                <label for="post-img-input" class="file-upload-label" style="font-size: 13px; padding: 6px;">زیادکردنی وێنە بۆ پۆست 📷</label>
+                <input type="file" id="post-img-input" accept="image/*" />
+                <button id="publish-post-btn">بڵاوکردنەوەی پۆست</button>
+            </div>
+            <div class="posts-feed" id="posts-feed">
+                <div style="text-align:center; color:#777; padding:10px;">هیچ پۆستێک نییە...</div>
+            </div>
+        </div>
+
+        <div id="search-tab" class="tab-content">
+            <div class="search-box-container">
+                <input id="search-input" placeholder="گەڕان بەدوای ناو..." />
+                <button id="search-btn" style="width: auto; padding: 10px 15px;">گەڕان</button>
+            </div>
+            <ul class="search-results" id="search-results">
+                <li style="text-align:center; color:#777; padding:20px;">ناوی کەسەکە بنووسە...</li>
+            </ul>
+        </div>
+
+        <div id="friends-tab" class="tab-content">
+            <ul class="friends-list" id="friends-list">
+                <li style="text-align:center; color:#777; padding:20px;">هێشتا هیچ هاوڕێیەکت نییە...</li>
+            </ul>
+        </div>
+
+        <div id="chats-tab" class="tab-content">
+            <ul class="chats-list" id="chats-list">
+                <li style="text-align:center; color:#777; padding:20px;">هیچ نامەیەک نییە...</li>
+            </ul>
+        </div>
+
+        <!-- نڤێگەیشنی خوارەوە -->
+        <div class="bottom-nav">
+            <button class="nav-btn active" data-target="discover-tab">🔥 دۆزینەوە</button>
+            <button class="nav-btn" data-target="posts-tab">📰 پۆستەکان</button>
+            <button class="nav-btn" data-target="search-tab">🔍 گەڕان</button>
+            <button class="nav-btn" data-target="friends-tab">👥 هاوڕێکان</button>
+            <button class="nav-btn" data-target="chats-tab">💬 چاتەکان</button>
+        </div>
+    </div>
+
+    <!-- پەنجەرەی چات -->
+    <div id="chat-box-modal">
+        <div class="chat-header">
+            <span id="current-chat-user">چات</span>
+            <button id="close-chat-btn" style="width: auto; background: white; color: #ea266e; padding: 4px 10px; font-size: 12px; border-radius: 10px;">گەڕانەوە</button>
+        </div>
+        <ul id="messages"></ul>
+        
+        <form id="form">
+            <label for="chat-image-input" class="chat-img-btn">وێنە 📷</label>
+            <input type="file" id="chat-image-input" accept="image/*" />
+            <input id="input" autocomplete="off" placeholder="پەیام..." />
+            <button type="submit">ناردن</button>
+        </form>
+    </div>
+
+    <script>
+        const loginScreen = document.getElementById('login-screen');
+        const chatScreen = document.getElementById('chat-screen');
+        const editProfileScreen = document.getElementById('edit-profile-screen');
+        const chatBoxModal = document.getElementById('chat-box-modal');
+        
+        const emailInput = document.getElementById('email-input');
+        const passwordInput = document.getElementById('password-input');
+        const usernameInput = document.getElementById('username-input');
+        const ageInput = document.getElementById('age-input');
+        const bioInput = document.getElementById('bio-input');
+        const statusInput = document.getElementById('status-input');
+        const avatarFile = document.getElementById('avatar-file');
+        const loginBtn = document.getElementById('login-btn');
+        
+        const editName = document.getElementById('edit-name');
+        const editAge = document.getElementById('edit-age');
+        const editBio = document.getElementById('edit-bio');
+        const editStatus = document.getElementById('edit-status');
+        const editAvatarFile = document.getElementById('edit-avatar-file');
+        const openEditBtn = document.getElementById('open-edit-btn');
+        const saveProfileBtn = document.getElementById('save-profile-btn');
+        const closeModalBtn = document.getElementById('close-modal-btn');
+
+        const cardContainer = document.getElementById('card-container');
+        const actionButtons = document.getElementById('action-buttons');
+        const skipBtn = document.getElementById('skip-btn');
+        const likeBtn = document.getElementById('like-btn');
+        
+        const postTextInput = document.getElementById('post-text-input');
+        const postImgInput = document.getElementById('post-img-input');
+        const publishPostBtn = document.getElementById('publish-post-btn');
+        const postsFeed = document.getElementById('posts-feed');
+
+        const searchInput = document.getElementById('search-input');
+        const searchBtn = document.getElementById('search-btn');
+        const searchResults = document.getElementById('search-results');
+
+        const friendsList = document.getElementById('friends-list');
+        const chatsList = document.getElementById('chats-list');
+        const navBtns = document.querySelectorAll('.nav-btn');
+        const tabContents = document.querySelectorAll('.tab-content');
+        const headerTitle = document.getElementById('header-title');
+
+        const currentChatUser = document.getElementById('current-chat-user');
+        const closeChatBtn = document.getElementById('close-chat-btn');
+        const form = document.getElementById('form');
+        const input = document.getElementById('input');
+        const chatImageInput = document.getElementById('chat-image-input');
+        const messages = document.getElementById('messages');
+
+        let currentUser = null;
+        let targetUserId = null;
+        let myAvatarBase64 = 'https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_1280.png';
+
+        // نموونەی بەکارهێنەرانی دروستکراو بۆ ئەوەی هەمیشە کەسێک هەبێت لە ئەپەکەدا بدۆزیتەوە
+        let sampleUsers = [
+            { id: 'u1', name: 'سۆما احمد', age: 22, bio: 'سڵاو لە هەمووان', status: 'سینگڵ (Single)', avatar: 'https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_1280.png' },
+            { id: 'u2', name: 'محمد محەمەد', age: 25, bio: 'گەشتیار و فۆتۆگرافەر', status: 'دەزگیران (Engaged)', avatar: 'https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_1280.png' }
+        ];
+
+        navBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                navBtns.forEach(b => b.classList.remove('active'));
+                tabContents.forEach(t => t.classList.remove('active'));
+                
+                btn.classList.add('active');
+                const target = document.getElementById(btn.dataset.target);
+                target.classList.add('active');
+
+                if(btn.dataset.target === 'discover-tab') headerTitle.textContent = 'تۆڕی ناسینەوە';
+                if(btn.dataset.target === 'posts-tab') { headerTitle.textContent = 'پۆستە گشتییەکان'; loadPosts(); }
+                if(btn.dataset.target === 'search-tab') headerTitle.textContent = 'گەڕان';
+                if(btn.dataset.target === 'friends-tab') headerTitle.textContent = 'هاوڕێکانم';
+                if(btn.dataset.target === 'chats-tab') headerTitle.textContent = 'نامەکان';
+            });
+        });
+
+        window.addEventListener('DOMContentLoaded', () => {
+            const savedData = localStorage.getItem('badoo_user_account');
+            if (savedData) {
+                try {
+                    currentUser = JSON.parse(savedData);
+                    usernameInput.value = currentUser.name || '';
+                    emailInput.value = currentUser.email || '';
+                    ageInput.value = currentUser.age || '';
+                    bioInput.value = currentUser.bio || '';
+                    statusInput.value = currentUser.status || 'سینگڵ (Single)';
+                    if (currentUser.avatar) myAvatarBase64 = currentUser.avatar;
+
+                    loginScreen.style.display = 'none';
+                    chatScreen.style.display = 'flex';
+                    loadDiscoverCards();
+                    loadPosts();
+                } catch(err) { localStorage.removeItem('badoo_user_account'); }
+            }
+        });
+
+        loginBtn.addEventListener('click', () => {
+            const email = emailInput.value.trim();
+            const password = passwordInput.value.trim();
+            const name = usernameInput.value.trim();
+            const age = ageInput.value.trim();
+            const bio = bioInput.value.trim();
+            const status = statusInput.value;
+
+            if (!email || !password || !name) {
+                alert('تکایە ئیمەیڵ، پاسوۆرد و ناو پڕ بکەرەوە');
+                return;
+            }
+
+            const file = avatarFile.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    myAvatarBase64 = e.target.result;
+                    saveAndLogin(email, password, name, age, bio, status);
+                };
+                reader.readAsDataURL(file);
+            } else {
+                saveAndLogin(email, password, name, age, bio, status);
+            }
+        });
+
+        function saveAndLogin(email, password, name, age, bio, status) {
+            currentUser = { id: 'user_' + Date.now(), email, password, name, age, bio, status, avatar: myAvatarBase64 };
+            localStorage.setItem('badoo_user_account', JSON.stringify(currentUser));
+
+            // زیادکردنی بۆ لیستی گشتی بەکارهێنەران
+            let allRegUsers = JSON.parse(localStorage.getItem('badoo_all_users') || '[]');
+            if(!allRegUsers.some(u => u.email === email)) {
+                allRegUsers.push(currentUser);
+                localStorage.setItem('badoo_all_users', JSON.stringify(allRegUsers));
+            }
+
+            loginScreen.style.display = 'none';
+            chatScreen.style.display = 'flex';
+            loadDiscoverCards();
+            loadPosts();
+        }
+
+        openEditBtn.addEventListener('click', () => {
+            if(currentUser) {
+                editName.value = currentUser.name;
+                editAge.value = currentUser.age;
+                editBio.value = currentUser.bio;
+                editStatus.value = currentUser.status;
+            }
+            editProfileScreen.style.display = 'flex';
+        });
+
+        closeModalBtn.addEventListener('click', () => { editProfileScreen.style.display = 'none'; });
+
+        saveProfileBtn.addEventListener('click', () => {
+            const name = editName.value.trim();
+            const age = editAge.value.trim();
+            const bio = editBio.value.trim();
+            const status = editStatus.value;
+
+            if (name && currentUser) {
+                const file = editAvatarFile.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        myAvatarBase64 = e.target.result;
+                        updateProfileData(name, age, bio, status);
+                    };
+                    reader.readAsDataURL(file);
+                } else { updateProfileData(name, age, bio, status); }
+            } else { alert('ناو بەتاڵ نەبێت'); }
+        });
+
+        function updateProfileData(name, age, bio, status) {
+            currentUser.name = name;
+            currentUser.age = age;
+            currentUser.bio = bio;
+            currentUser.status = status;
+            currentUser.avatar = myAvatarBase64;
+            localStorage.setItem('badoo_user_account', JSON.stringify(currentUser));
+            editProfileScreen.style.display = 'none';
+            alert('پرۆفایلەکەت نوێ کرایەوە!');
+        }
+
+        // بەشی دۆزینەوە (Swipe)
+        let discoverIndex = 0;
+        function loadDiscoverCards() {
+            cardContainer.innerHTML = '';
+            let allRegUsers = JSON.parse(localStorage.getItem('badoo_all_users') || '[]');
+            let otherUsers = allRegUsers.filter(u => currentUser && u.email !== currentUser.email);
+            if(otherUsers.length === 0) otherUsers = sampleUsers;
+
+            if (discoverIndex >= otherUsers.length) discoverIndex = 0;
+            if (otherUsers.length === 0) {
+                cardContainer.innerHTML = `<div style="text-align:center; color:#777; padding:20px;">هیچ کەسێکی تر نییە...</div>`;
+                actionButtons.style.display = 'none';
+                return;
+            }
+
+            actionButtons.style.display = 'flex';
+            const user = otherUsers[discoverIndex];
+
+            const card = document.createElement('div');
+            card.className = 'swipe-card';
+            card.innerHTML = `
+                <img src="${user.avatar}" alt="وێنە">
+                <div class="card-info">
+                    <h3>${user.name}${user.age ? ', ' + user.age : ''}</h3>
+                    <div class="status-badge">${user.status || ''}</div>
+                    <p>${user.bio ? user.bio : 'هیچ بایۆیەک نییە'}</p>
+                </div>
+            `;
+            cardContainer.appendChild(card);
+        }
+
+        skipBtn.addEventListener('click', () => {
+            discoverIndex++;
+            loadDiscoverCards();
+        });
+
+        likeBtn.addEventListener('click', () => {
+            let allRegUsers = JSON.parse(localStorage.getItem('badoo_all_users') || '[]');
+            let otherUsers = allRegUsers.filter(u => currentUser && u.email !== currentUser.email);
+            if(otherUsers.length === 0) otherUsers = sampleUsers;
+
+            if (otherUsers.length > 0 && discoverIndex < otherUsers.length) {
+                const user = otherUsers[discoverIndex];
+                addFriendToList(user);
+                openChat(user.id, user.name);
+                discoverIndex++;
+                loadDiscoverCards();
+            }
+        });
+
+        // بڵاوکردنەوەی پۆست
+        publishPostBtn.addEventListener('click', () => {
+            const text = postTextInput.value.trim();
+            const file = postImgInput.files[0];
+
+            if (!text && !file) {
+                alert('تکایە شتێک بنووسە یان وێنەیەک هەڵبژێرە');
+                return;
+            }
+
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    savePost(text, e.target.result);
+                };
+                reader.readAsDataURL(file);
+            } else {
+                savePost(text, null);
+            }
+        });
+
+        function savePost(text, img) {
+            const posts = JSON.parse(localStorage.getItem('badoo_posts') || '[]');
+            const newPost = {
+                authorName: currentUser ? currentUser.name : 'بەکارهێنەر',
+                authorAvatar: myAvatarBase64,
+                text: text,
+                image: img,
+                likes: 0
+            };
+            posts.push(newPost);
+            localStorage.setItem('badoo_posts', JSON.stringify(posts));
+            postTextInput.value = '';
+            postImgInput.value = '';
+            loadPosts();
+        }
+
+        function loadPosts() {
+            postsFeed.innerHTML = '';
+            const posts = JSON.parse(localStorage.getItem('badoo_posts') || '[]');
+            if (posts.length === 0) {
+                postsFeed.innerHTML = `<div style="text-align:center; color:#777; padding:10px;">هیچ پۆستێک نییە... یەکەم کەس بە پۆست بکە!</div>`;
+                return;
+            }
+
+            posts.slice().reverse().forEach((post, index) => {
+                const card = document.createElement('div');
+                card.className = 'post-card';
+                card.innerHTML = `
+                    <div class="post-header">
+                        <img src="${post.authorAvatar || 'https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_1280.png'}">
+                        <h4>${post.authorName}</h4>
+                    </div>
+                    ${post.text ? `<div class="post-body">${post.text}</div>` : ''}
+                    ${post.image ? `<img src="${post.image}" class="post-img">` : ''}
+                    <div class="post-footer" data-index="${posts.length - 1 - index}">
+                        <span>❤ لایک (${post.likes || 0})</span>
+                    </div>
+                `;
+                card.querySelector('.post-footer').addEventListener('click', function() {
+                    let idx = this.getAttribute('data-index');
+                    posts[idx].likes = (posts[idx].likes || 0) + 1;
+                    localStorage.setItem('badoo_posts', JSON.stringify(posts));
+                    loadPosts();
+                });
+                postsFeed.appendChild(card);
+            });
+        }
+
+        // گەڕان بەدوای بەکارهێنەردا
+        searchBtn.addEventListener('click', () => {
+            const query = searchInput.value.trim().toLowerCase();
+            searchResults.innerHTML = '';
+
+            let allRegUsers = JSON.parse(localStorage.getItem('badoo_all_users') || '[]');
+            let searchable = allRegUsers.concat(sampleUsers);
+            const matched = searchable.filter(u => u.name && u.name.toLowerCase().includes(query));
+
+            if (matched.length === 0) {
+                searchResults.innerHTML = `<li style="text-align:center; color:#777; padding:20px;">کەس نەدۆزرایەوە...</li>`;
+                return;
+            }
+
+            matched.forEach(user => {
+                const li = document.createElement('li');
+                li.className = 'user-item';
+                li.innerHTML = `
+                    <img src="${user.avatar}">
+                    <div class="info">
+                        <h4>${user.name}</h4>
+                        <p>بۆ دەستپێکردنی چات کلیک بکە</p>
+                    </div>
+                `;
+                li.addEventListener('click', () => {
+                    addFriendToList(user);
+                    openChat(user.id, user.name);
+                });
+                searchResults.appendChild(li);
+            });
+        });
+
+        function addFriendToList(user) {
+            let friends = JSON.parse(localStorage.getItem('badoo_friends') || '[]');
+            if (!friends.some(f => f.id === user.id)) {
+                friends.push(user);
+                localStorage.setItem('badoo_friends', JSON.stringify(friends));
+            }
+            renderFriends();
+        }
+
+        function renderFriends() {
+            friendsList.innerHTML = '';
+            chatsList.innerHTML = '';
+            let friends = JSON.parse(localStorage.getItem('badoo_friends') || '[]');
+            
+            if (friends.length === 0) {
+                friendsList.innerHTML = `<li style="text-align:center; color:#777; padding:20px;">هێشتا هیچ هاوڕێیەکت نییە...</li>`;
+                chatsList.innerHTML = `<li style="text-align:center; color:#777; padding:20px;">هیچ نامەیەک نییە...</li>`;
+                return;
+            }
+
+            friends.forEach(friend => {
+                const li = document.createElement('li');
+                li.className = 'user-item';
+                li.innerHTML = `
+                    <img src="${friend.avatar}">
+                    <div class="info">
+                        <h4>${friend.name}</h4>
+                        <p>${friend.status || 'چات بکە'}</p>
+                    </div>
+                `;
+                li.addEventListener('click', () => openChat(friend.id, friend.name));
+                friendsList.appendChild(li);
+
+                const chatLi = li.cloneNode(true);
+                chatLi.addEventListener('click', () => openChat(friend.id, friend.name));
+                chatsList.appendChild(chatLi);
+            });
+        }
+
+        function openChat(id, name) {
+            targetUserId = id;
+            currentChatUser.textContent = `چات لەگەڵ: ${name}`;
+            loadMessages();
+            chatBoxModal.style.display = 'flex';
+        }
+
+        closeChatBtn.addEventListener('click', () => { chatBoxModal.style.display = 'none'; });
+
+        form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            if (targetUserId && input.value.trim()) {
+                const msgText = input.value;
+                saveMessage(targetUserId, msgText, 'text', 'my-msg');
+                appendMessage(msgText, 'text', 'my-msg');
+                input.value = '';
+            }
+        });
+
+        function saveMessage(receiverId, content, type, className) {
+            const allMsgs = JSON.parse(localStorage.getItem('badoo_messages') || '{}');
+            const key = currentUser.id + '_' + receiverId;
+            if(!allMsgs[key]) allMsgs[key] = [];
+            allMsgs[key].push({ content, type, className });
+            localStorage.setItem('badoo_messages', JSON.stringify(allMsgs));
+        }
+
+        function loadMessages() {
+            messages.innerHTML = '';
+            const allMsgs = JSON.parse(localStorage.getItem('badoo_messages') || '{}');
+            const key = currentUser.id + '_' + targetUserId;
+            if(allMsgs[key]) {
+                allMsgs[key].forEach(m => appendMessage(m.content, m.type, m.className));
+            }
+        }
+
+        function appendMessage(content, type, className) {
+            const item = document.createElement('li');
+            item.className = className;
+            if (type === 'image') {
+                const img = document.createElement('img');
+                img.src = content;
+                img.className = 'chat-img-msg';
+                item.appendChild(img);
+            } else {
+                item.textContent = content;
+            }
+            messages.appendChild(item);
+            messages.scrollTop = messages.scrollHeight;
+        }
+
+        // بارکردنی سەرەتایی هاوڕێکان
+        renderFriends();
+    </script>
+</body>
+</html>
